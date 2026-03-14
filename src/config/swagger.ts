@@ -1,4 +1,4 @@
-const swaggerJsdoc = require('swagger-jsdoc')
+import swaggerJsdoc from 'swagger-jsdoc'
 
 const options = {
   definition: {
@@ -23,7 +23,6 @@ const options = {
         },
       },
       schemas: {
-        // ── REQUEST SCHEMAS ──────────────────────────────────
         RegisterRequest: {
           type: 'object',
           required: ['email', 'password'],
@@ -55,7 +54,6 @@ const options = {
             },
           },
         },
-        // ── RESPONSE SCHEMAS ─────────────────────────────────
         SuccessResponse: {
           type: 'object',
           properties: {
@@ -88,9 +86,9 @@ const options = {
       },
     },
   },
-  apis: ['./src/routes/*.js'], // lire les annotations dans les routes
+  apis: ['./src/routes/*.ts'], // lire les annotations dans les routes
 }
 
 const swaggerSpec = swaggerJsdoc(options)
 
-module.exports = swaggerSpec
+export default swaggerSpec

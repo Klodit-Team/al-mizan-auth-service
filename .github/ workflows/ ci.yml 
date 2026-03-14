@@ -1,0 +1,62 @@
+# .github/workflows/ci.yml
+
+name: CI Pipeline
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+
+  # ── Job 1 : Tests + Qualité ──────────────────────────────
+  test-and-analyze:
+    runs-on: ubuntu-latest
+
+    steps:
+
+      # 1. Récupérer le code
+      - name: Checkout code
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0   # Nécessaire pour SonarCloud
+
+      # 2. Installer Node.js
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      # 3. Installer les dépendances
+      - name: Install dependencies
+        run: npm ci
+
+      # 4. Lancer les tests avec coverage
+      - name: Run tests
+        run: npm test -- --coverage
+
+      # 5. Analyser avec SonarCloud
+      - name: SonarCloud Analysis
+        uses: SonarSource/sonarcloud-github-action@master
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+
+      # 6. Build Docker pour vérifier que ça compile
+      - name: Docker build test
+        run: docker build -t mon-service:test .
+
+  # ── Job 2 : Deploy (seulement sur main) ─────────────────
+  deploy:
+    needs: test-and-analyze
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Deploy placeholder
+        run: echo "✅ Tests passés - Deploy configuré quand serveur prêt"
