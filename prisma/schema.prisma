@@ -4,7 +4,7 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-    url      = env("DATABASE_URL")
+  url      = env("DATABASE_URL")
 }
 
 enum Role {
@@ -19,13 +19,14 @@ model User {
   password   String
   created_at DateTime @default(now())
 
-  refreshTokens RefreshToken[]
+  sessions       Session[]
+  passwordResets PasswordReset[]
 
   @@map("users")
 }
 
-model RefreshToken {
-  id         String   @id @default(uuid())
+model Session {
+  id         String   @id @default(uuid())  
   token      String   @unique
   deviceInfo String?
   ipAddress  String?
@@ -35,5 +36,18 @@ model RefreshToken {
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
   userId String @map("user_id")
 
-  @@map("refresh_tokens")
+  @@map("sessions")
+}
+
+model PasswordReset {
+  id        String   @id @default(uuid())
+  token     String   @unique
+  used      Boolean  @default(false)
+  expiresAt DateTime @map("expires_at")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId String @map("user_id")
+
+  @@map("password_resets")
 }

@@ -19,7 +19,7 @@ export const generateRefreshToken = async (
   const client = tx ?? prisma
 
   // Count active sessions
-  const activeCount = await client.refreshToken.count({
+  const activeCount = await client.session.count({
     where: {
       userId,
       expiresAt: { gt: new Date() },
@@ -27,20 +27,20 @@ export const generateRefreshToken = async (
   })
 
   if (activeCount >= MAX_SESSIONS) {
-    const oldest = await client.refreshToken.findFirst({
+    const oldest = await client.session.findFirst({
       where: { userId },
       orderBy: { created_at: 'asc' },
     })
 
     if (oldest) {
-      await client.refreshToken.delete({ where: { id: oldest.id } })
+      await client.session.delete({ where: { id: oldest.id } })
     }
   }
 
   const token = crypto.randomBytes(64).toString('hex')
   const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) // 7 days
 
-  await client.refreshToken.create({
+  await client.session.create({
     data: { userId, token, expiresAt, deviceInfo, ipAddress },
   })
 
@@ -72,23 +72,23 @@ export const rotateRefreshToken = async (
   ipAddress?: string | null
 ): Promise<string> => {
   return await prisma.$transaction(async (t: any) => {
-    await t.refreshToken.deleteMany({ where: { token: oldToken } })
+    await t.session.deleteMany({ where: { token: oldToken } })
     return await generateRefreshToken(userId, deviceInfo, ipAddress, t)
   })
 }
 
 export const validateRefreshToken = async (token: string) => {
-  return await prisma.refreshToken.findFirst({
+  return await prisma.session.findFirst({
     where: { token, expiresAt: { gt: new Date() } },
   })
 }
 
 export const revokeAllRefreshTokens = async (userId: string): Promise<void> => {
-  await prisma.refreshToken.deleteMany({ where: { userId } })
+  await prisma.session.deleteMany({ where: { userId } })
 }
 
 export const getActiveSessions = async (userId: string) => {
-  return await prisma.refreshToken.findMany({
+  return await prisma.session.findMany({
     where: { userId, expiresAt: { gt: new Date() } },
     select: { id: true, deviceInfo: true, ipAddress: true, created_at: true, expiresAt: true },
     orderBy: { created_at: 'desc' },
@@ -96,7 +96,7 @@ export const getActiveSessions = async (userId: string) => {
 }
 
 export const revokeSession = async (sessionId: string, userId: string): Promise<void> => {
-  await prisma.refreshToken.deleteMany({ where: { id: sessionId, userId } })
+  await prisma.session.deleteMany({ where: { id: sessionId, userId } })
 }
 
 export default {

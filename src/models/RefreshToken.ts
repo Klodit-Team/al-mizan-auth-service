@@ -17,4 +17,3 @@ export interface RefreshTokenResponse {
   created_at: Date
 }
 
-// NOTE: Database operations should use @prisma/client via services (e.g. tokenService)

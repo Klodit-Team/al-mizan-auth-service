@@ -172,7 +172,7 @@ export const logout = async (req: Request, res: Response): Promise<void> => {
 
     if (accessToken) await tokenService.blacklistToken(accessToken)
     if (refreshToken) {
-      await prisma.refreshToken.deleteMany({ where: { token: refreshToken } })
+      await prisma.session.deleteMany({ where: { token: refreshToken } })
     }
 
     res.clearCookie('access_token')
@@ -215,4 +215,131 @@ export const deleteSession = async (req: Request, res: Response): Promise<void> 
   res.json({ message: 'Session revoked' })
 }
 
-export default { register, login, refresh, logout, logoutAll, me, sessions, deleteSession }
+// ─── Password Reset ────────────────────────────────────────────────────────
+import crypto from 'crypto'
+const generateResetToken = (): string => {
+  return crypto.randomBytes(32).toString('hex')
+}
+const RESET_TOKEN_EXPIRY = 1 * 60 * 60 * 1000 // 1 heure
+
+const getValidResetRecord = async (token: string) => {
+  const resetRecord = await prisma.passwordReset.findUnique({
+    where: { token },
+    include: { user: true },
+  })
+
+  if (!resetRecord) throw new Error('Invalid or expired token')
+  if (resetRecord.expiresAt < new Date()) throw new Error('Token has expired')
+  if (resetRecord.used) throw new Error('Token has already been used')
+
+  return resetRecord
+}
+export const forgotPassword = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { email } = req.body
+
+    if (!email) {
+      res.status(400).json({ message: 'Email required' })
+      return
+    }
+
+    const user = await userService.findByEmail(email)
+
+    if (!user) {
+      // Sécurité : on ne révèle pas si l'email existe
+      res.status(200).json({ message: 'If email exists, a reset link has been sent' })
+      return
+    }
+
+    const token = generateResetToken()
+    const expiresAt = new Date(Date.now() + RESET_TOKEN_EXPIRY)
+
+    await prisma.passwordReset.create({
+      data: {
+        token,
+        expiresAt,
+        userId: user.id,
+      },
+    })
+
+    // TODO: await sendResetEmail(user.email, token)
+
+    res.status(200).json({
+      message: 'If email exists, a reset link has been sent',
+      token, 
+    
+    })
+  } catch (err: any) {
+    res.status(500).json({ message: 'Server error', error: err.message })
+  }
+}
+
+export const verifyResetToken = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { token } = req.body
+
+    if (!token) {
+      res.status(400).json({ message: 'Token required' })
+      return
+    }
+
+    const resetRecord = await getValidResetRecord(token) 
+
+    res.status(200).json({
+      message: 'Token is valid',
+      email: resetRecord.user.email,
+    })
+  } catch (err: any) {
+    res.status(400).json({ message: err.message })
+  }
+}
+export const resetPassword = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { token, newPassword, confirmeNewPassword } = req.body
+
+    // ── Validations ──────────────────────────────────────
+    if (!token || !newPassword || !confirmeNewPassword) {
+      res.status(400).json({ message: 'Token and new password required' })
+      return
+    }
+
+    if (newPassword.length < 8) {
+      res.status(400).json({ message: 'Password must be at least 8 characters' })
+      return
+    }
+
+    if (newPassword !== confirmeNewPassword) {
+      res.status(400).json({ message: 'Password and confirm password do not match' })
+      return
+    }
+
+    // ── Vérifier le token ────────────────────────────────
+    const resetRecord = await getValidResetRecord(token)
+
+    // ── Transaction ──────────────────────────────────────
+    await prisma.$transaction(async (t) => {
+      const hashedPassword = await bcrypt.hash(newPassword, 12)
+
+      // 1. Mettre à jour le mot de passe
+      await t.user.update({
+        where: { id: resetRecord.userId },
+        data: { password: hashedPassword },
+      })
+
+      // 2. Marquer le token comme utilisé
+      await t.passwordReset.update({
+        where: { id: resetRecord.id },
+        data: { used: true },
+      })
+
+      // 3. Supprimer tous les sessions (sécurité)
+      await t.session.deleteMany({
+        where: { userId: resetRecord.userId },
+      })
+    })
+     res.status(200).json({ message: 'Password reset successfully. Please login with your new password.' })
+  } catch (err: any) {
+    res.status(500).json({ message: 'Server error', error: err.message })
+  }
+}
+export default { register, login, refresh, logout, logoutAll, me, sessions, deleteSession, forgotPassword, verifyResetToken, resetPassword }

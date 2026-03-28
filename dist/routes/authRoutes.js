@@ -1,9 +1,7 @@
-import { Router } from 'express'
-import * as authController from '../controllers/authController.js'
-import authenticate from '../middleware/authMiddleware.js'
-
-const router = Router()
-
+import { Router } from 'express';
+import * as authController from '../controllers/authController.js';
+import authenticate from '../middleware/authMiddleware.js';
+const router = Router();
 /**
  * @swagger
  * /auth/register:
@@ -22,8 +20,7 @@ const router = Router()
  *       400:
  *         description: Email already exists
  */
-router.post('/register', authController.register)
-
+router.post('/register', authController.register);
 /**
  * @swagger
  * /auth/login:
@@ -44,8 +41,7 @@ router.post('/register', authController.register)
  *       429:
  *         description: Account locked
  */
-router.post('/login', authController.login)
-
+router.post('/login', authController.login);
 /**
  * @swagger
  * /auth/refresh:
@@ -58,8 +54,7 @@ router.post('/login', authController.login)
  *       403:
  *         description: Invalid refresh token
  */
-router.post('/refresh', authController.refresh)
-
+router.post('/refresh', authController.refresh);
 /**
  * @swagger
  * /auth/logout:
@@ -72,8 +67,7 @@ router.post('/refresh', authController.refresh)
  *       200:
  *         description: Logged out successfully
  */
-router.post('/logout', authenticate, authController.logout)
-
+router.post('/logout', authenticate, authController.logout);
 /**
  * @swagger
  * /auth/logout-all:
@@ -86,8 +80,7 @@ router.post('/logout', authenticate, authController.logout)
  *       200:
  *         description: Logged out from all devices
  */
-router.post('/logout-all', authenticate, authController.logoutAll)
-
+router.post('/logout-all', authenticate, authController.logoutAll);
 /**
  * @swagger
  * /auth/me:
@@ -104,8 +97,7 @@ router.post('/logout-all', authenticate, authController.logoutAll)
  *             schema:
  *               $ref: '#/components/schemas/UserResponse'
  */
-router.get('/me', authenticate, authController.me)
-
+router.get('/me', authenticate, authController.me);
 /**
  * @swagger
  * /auth/sessions:
@@ -124,8 +116,7 @@ router.get('/me', authenticate, authController.me)
  *               items:
  *                 $ref: '#/components/schemas/SessionResponse'
  */
-router.get('/sessions', authenticate, authController.sessions)
-
+router.get('/sessions', authenticate, authController.sessions);
 /**
  * @swagger
  * /auth/sessions/{id}:
@@ -144,13 +135,10 @@ router.get('/sessions', authenticate, authController.sessions)
  *       200:
  *         description: Session revoked
  */
-router.delete('/sessions/:id', authenticate, authController.deleteSession)
-
-
-router.post('/forgot-password', authController.forgotPassword)
-
+router.delete('/sessions/:id', authenticate, authController.deleteSession);
+router.post('/forgot-password', authController.forgotPassword);
 /**
- * @swagger
+ * * @swagger
  * /auth/forgot-password:
  *   post:
  *     summary: Request password reset
@@ -167,14 +155,13 @@ router.post('/forgot-password', authController.forgotPassword)
  *               email:
  *                 type: string
  *                 format: email
- *     responses:
- *       200:
- *         description: Password reset email sent (if user exists)
- *       400:
- *         description: Invalid email format
+ *                 response:
+ * 200:
+ *   description: Password reset email sent (if user exists)
+ * 400:
+ *   description: Invalid email format
  */
-router.post('/verify-token', authController.verifyResetToken)
-
+router.post('/verify-token', authController.verifyResetToken);
 /**
  * @swagger
  * /auth/verify-token:
@@ -198,9 +185,7 @@ router.post('/verify-token', authController.verifyResetToken)
  *       400:
  *         description: Invalid or expired token
  */
-
-router.post('/reset-password', authController.resetPassword)
-
+router.post('/reset-password', authController.resetPassword);
 /**
  * @swagger
  * /auth/reset-password:
@@ -230,4 +215,5 @@ router.post('/reset-password', authController.resetPassword)
  *       400:
  *         description: Invalid token or password criteria not met
  */
-export default router
+export default router;
+//# sourceMappingURL=authRoutes.js.map
