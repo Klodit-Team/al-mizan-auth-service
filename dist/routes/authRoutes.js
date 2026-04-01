@@ -4,7 +4,7 @@ import authenticate from '../middleware/authMiddleware.js';
 const router = Router();
 /**
  * @swagger
- * /auth/register:
+ * /api/v1/auth/register:
  *   post:
  *     summary: Register a new user
  *     tags: [Auth]
@@ -13,38 +13,128 @@ const router = Router();
  *       content:
  *         application/json:
  *           schema:
- *             $ref: '#/components/schemas/RegisterRequest'
+ *             oneOf:
+ *               - $ref: '#/components/schemas/RegisterServiceContractantRequest'
+ *               - $ref: '#/components/schemas/RegisterOperateurEconomiqueRequest'
  *     responses:
  *       201:
- *         description: User created
+ *         description: Account created successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: Account created. Verify your email.
+ *                 user_id:
+ *                   type: string
+ *                   example: uuid-xxxx-xxxx
  *       400:
- *         description: Email already exists
+ *         description: Email already exists or missing fields
+ *       500:
+ *         description: Server error
  */
-router.post('/register', authController.register);
+router.post('/api/v1/auth/register', authController.register);
 /**
  * @swagger
- * /auth/login:
- *   post:
- *     summary: Login user
- *     tags: [Auth]
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             $ref: '#/components/schemas/LoginRequest'
- *     responses:
- *       200:
- *         description: Logged in successfully
- *       401:
- *         description: Invalid credentials
- *       429:
- *         description: Account locked
+ * components:
+ *   schemas:
+ *     RegisterBase:
+ *       type: object
+ *       required:
+ *         - email
+ *         - password
+ *         - role
+ *         - nom
+ *         - prenom
+ *         - denomination
+ *         - type
+ *       properties:
+ *         email:
+ *           type: string
+ *           format: email
+ *           example: user@example.com
+ *         password:
+ *           type: string
+ *           minLength: 8
+ *           example: MyPassword123
+ *         role:
+ *           type: string
+ *           enum: [SERVICE_CONTRACTANT, OPERATEUR_ECONOMIQUE]
+ *           example: SERVICE_CONTRACTANT
+ *         langue:
+ *           type: string
+ *           enum: [fr, ar]
+ *           example: fr
+ *         nom:
+ *           type: string
+ *           example: Benali
+ *         prenom:
+ *           type: string
+ *           example: Ahmed
+ *         telephone:
+ *           type: string
+ *           example: "0550000000"
+ *         denomination:
+ *           type: string
+ *           example: Ministère des Finances
+ *         nif:
+ *           type: string
+ *           example: "123456789"
+ *         nis:
+ *           type: string
+ *           example: "987654321"
+ *         registre_commerce:
+ *           type: string
+ *           example: "RC-2024-001"
+ *         adresse:
+ *           type: string
+ *           example: Rue Didouche Mourad, Alger
+ *         wilaya:
+ *           type: string
+ *           example: Alger
+ *         commune:
+ *           type: string
+ *           example: Sidi M'Hamed
+ *         type:
+ *           type: string
+ *           enum: [EPA, EPIC, MINISTERE, ENTREPRISE_PRIVEE, ENTREPRISE_PUBLIQUE, GROUPEMENT]
+ *           example: MINISTERE
+ *
+ *     RegisterServiceContractantRequest:
+ *       allOf:
+ *         - $ref: '#/components/schemas/RegisterBase'
+ *         - type: object
+ *           required:
+ *             - code_service
+ *           properties:
+ *             code_service:
+ *               type: string
+ *               example: "SC-001"
+ *             secteur_activite:
+ *               type: string
+ *               example: Travaux publics
+ *             ordonnateur:
+ *               type: string
+ *               example: Mohamed Larbi
+ *
+ *     RegisterOperateurEconomiqueRequest:
+ *       allOf:
+ *         - $ref: '#/components/schemas/RegisterBase'
+ *         - type: object
+ *           properties:
+ *             qualifications:
+ *               type: string
+ *               example: BTP, génie civil
+ *             categories:
+ *               type: string
+ *               example: Catégorie 1
  */
-router.post('/login', authController.login);
+router.post('/api/v1/auth/login', authController.login);
 /**
  * @swagger
- * /auth/refresh:
+ * /api/v1/auth/refresh:
  *   post:
  *     summary: Refresh access token
  *     tags: [Auth]
@@ -54,10 +144,10 @@ router.post('/login', authController.login);
  *       403:
  *         description: Invalid refresh token
  */
-router.post('/refresh', authController.refresh);
+router.post('/api/v1/auth/refresh', authController.refresh);
 /**
  * @swagger
- * /auth/logout:
+ * /api/v1/auth/logout:
  *   post:
  *     summary: Logout current session
  *     tags: [Auth]
@@ -67,10 +157,10 @@ router.post('/refresh', authController.refresh);
  *       200:
  *         description: Logged out successfully
  */
-router.post('/logout', authenticate, authController.logout);
+router.post('/api/v1/auth/logout', authenticate, authController.logout);
 /**
  * @swagger
- * /auth/logout-all:
+ * /api/v1/auth/logout-all:
  *   post:
  *     summary: Logout all sessions
  *     tags: [Auth]
@@ -80,10 +170,10 @@ router.post('/logout', authenticate, authController.logout);
  *       200:
  *         description: Logged out from all devices
  */
-router.post('/logout-all', authenticate, authController.logoutAll);
+router.post('/api/v1/auth/logout-all', authenticate, authController.logoutAll);
 /**
  * @swagger
- * /auth/me:
+ * /api/v1/auth/me:
  *   get:
  *     summary: Get current user info
  *     tags: [Auth]
@@ -97,10 +187,10 @@ router.post('/logout-all', authenticate, authController.logoutAll);
  *             schema:
  *               $ref: '#/components/schemas/UserResponse'
  */
-router.get('/me', authenticate, authController.me);
+router.get('/api/v1/auth/me', authenticate, authController.me);
 /**
  * @swagger
- * /auth/sessions:
+ * /api/v1/auth/sessions:
  *   get:
  *     summary: Get all active sessions
  *     tags: [Auth]
@@ -116,10 +206,10 @@ router.get('/me', authenticate, authController.me);
  *               items:
  *                 $ref: '#/components/schemas/SessionResponse'
  */
-router.get('/sessions', authenticate, authController.sessions);
+router.get('/api/v1/auth/sessions', authenticate, authController.sessions);
 /**
  * @swagger
- * /auth/sessions/{id}:
+ * /api/v1/auth/sessions/{id}:
  *   delete:
  *     summary: Revoke a specific session
  *     tags: [Auth]
@@ -135,11 +225,11 @@ router.get('/sessions', authenticate, authController.sessions);
  *       200:
  *         description: Session revoked
  */
-router.delete('/sessions/:id', authenticate, authController.deleteSession);
-router.post('/forgot-password', authController.forgotPassword);
+router.delete('/api/v1/auth/sessions/:id', authenticate, authController.deleteSession);
+router.post('/api/v1/auth/forgot-password', authController.forgotPassword);
 /**
- * * @swagger
- * /auth/forgot-password:
+ * @swagger
+ * /api/v1/auth/forgot-password:
  *   post:
  *     summary: Request password reset
  *     tags: [Auth]
@@ -155,16 +245,16 @@ router.post('/forgot-password', authController.forgotPassword);
  *               email:
  *                 type: string
  *                 format: email
- *                 response:
- * 200:
- *   description: Password reset email sent (if user exists)
- * 400:
- *   description: Invalid email format
+ *     responses:
+ *       200:
+ *         description: Password reset email sent (if user exists)
+ *       400:
+ *         description: Invalid email format
  */
-router.post('/verify-token', authController.verifyResetToken);
+router.post('/api/v1/auth/verify-token', authController.verifyResetToken);
 /**
  * @swagger
- * /auth/verify-token:
+ * /api/v1/auth/verify-token:
  *   post:
  *     summary: Verify password reset token
  *     tags: [Auth]
@@ -185,10 +275,10 @@ router.post('/verify-token', authController.verifyResetToken);
  *       400:
  *         description: Invalid or expired token
  */
-router.post('/reset-password', authController.resetPassword);
+router.post('/api/v1/auth/reset-password', authController.resetPassword);
 /**
  * @swagger
- * /auth/reset-password:
+ * /api/v1/auth/reset-password:
  *   post:
  *     summary: Reset password using token
  *     tags: [Auth]

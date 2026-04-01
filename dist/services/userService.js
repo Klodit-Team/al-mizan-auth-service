@@ -5,8 +5,8 @@ export const findByEmail = async (email) => {
 export const findById = async (id) => {
     return await prisma.user.findUnique({ where: { id } });
 };
-export const createUser = async (email, password, role) => {
-    return await prisma.user.create({ data: { email, password, role: role } });
+export const createUser = async (email, password) => {
+    return await prisma.user.create({ data: { email, password } });
 };
 export default { findByEmail, findById, createUser };
 //# sourceMappingURL=userService.js.map

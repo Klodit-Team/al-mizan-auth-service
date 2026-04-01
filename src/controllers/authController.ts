@@ -4,6 +4,7 @@ import prisma from '../config/db.js'
 import * as userService from '../services/userService.js'
 import * as tokenService from '../services/tokenService.js'
 import { client as redis } from '../config/redis.js'
+import { publishToExchange } from '../rabbitmq.js'
 
 const MAX_ATTEMPTS = 5
 const BLOCK_DURATION = 15 * 60 // 15 minutes
@@ -50,23 +51,59 @@ const resetBruteForce = async (email: string): Promise<void> => {
 
 // ─── Controllers ───────────────────────────────────────────────────────────
 
-export const register = async (req: Request, res: Response): Promise<void> => {
+// auth.controller.ts
+ export const register = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { email, password } = req.body
-    if (!email || !password) {
-      res.status(400).json({ message: 'Email and password required' })
+    const {
+      email, password, role, langue,
+      nom, prenom, telephone,
+      denomination, nif, nis, registre_commerce,
+      adresse, wilaya, commune, type,
+      // SERVICE_CONTRACTANT
+      code_service, secteur_activite, ordonnateur,
+      // OPERATEUR_ECONOMIQUE
+      qualifications, categories,
+    } = req.body
+
+    if (!email || !password || !role) {
+      res.status(400).json({ message: 'Email, password and role are required' })
       return
     }
 
     const user = await prisma.$transaction(async (t) => {
       const exists = await t.user.findUnique({ where: { email } })
       if (exists) throw new Error('EMAIL_EXISTS')
-
       const hashed = await bcrypt.hash(password, 12)
       return t.user.create({ data: { email, password: hashed } })
     })
 
-    res.status(201).json({ message: 'User created', user: { id: user.id, email: user.email } })
+    await publishToExchange('user.registered', {
+      event_id: crypto.randomUUID(),
+      user_id: user.id,
+      email: user.email,
+      role,
+      langue,
+      timestamp: new Date().toISOString(),
+      // Profil
+      nom,
+      prenom,
+      telephone,
+      // Organisation
+      denomination,
+      nif,
+      nis,
+      registre_commerce,
+      adresse,
+      wilaya,
+      commune,
+      type,
+      // Conditionnel selon role
+      ...(role === 'SERVICE_CONTRACTANT' && { code_service, secteur_activite, ordonnateur }),
+      ...(role === 'OPERATEUR_ECONOMIQUE' && { qualifications, categories }),
+    })
+
+    res.status(201).json({ message: 'Account created. Verify your email.', user_id: user.id })
+
   } catch (err: any) {
     if (err.message === 'EMAIL_EXISTS') {
       res.status(400).json({ message: 'Email already exists' })
@@ -76,6 +113,7 @@ export const register = async (req: Request, res: Response): Promise<void> => {
   }
 }
 
+ 
 export const login = async (req: Request, res: Response): Promise<void> => {
   try {
     const { email, password } = req.body
@@ -119,7 +157,7 @@ export const login = async (req: Request, res: Response): Promise<void> => {
     res.cookie('refresh_token', refreshToken, {
       ...COOKIE_OPTIONS,
       maxAge: 7 * 24 * 60 * 60 * 1000,
-      path: '/auth/refresh',
+  path: '/api/v1/auth/refresh',
     })
 
     res.json({ message: 'Logged in successfully' })
@@ -156,7 +194,7 @@ export const refresh = async (req: Request, res: Response): Promise<void> => {
     res.cookie('refresh_token', newRefreshToken, {
       ...COOKIE_OPTIONS,
       maxAge: 7 * 24 * 60 * 60 * 1000,
-      path: '/auth/refresh',
+  path: '/api/v1/auth/refresh',
     })
 
     res.json({ message: 'Token refreshed' })
@@ -176,7 +214,7 @@ export const logout = async (req: Request, res: Response): Promise<void> => {
     }
 
     res.clearCookie('access_token')
-    res.clearCookie('refresh_token', { path: '/auth/refresh' })
+  res.clearCookie('refresh_token', { path: '/api/v1/auth/refresh' })
     res.json({ message: 'Logged out successfully' })
   } catch (err: any) {
     res.status(500).json({ message: 'Server error', error: err.message })
@@ -193,7 +231,7 @@ export const logoutAll = async (req: Request, res: Response): Promise<void> => {
     }
 
     res.clearCookie('access_token')
-    res.clearCookie('refresh_token', { path: '/auth/refresh' })
+  res.clearCookie('refresh_token', { path: '/api/v1/auth/refresh' })
     res.json({ message: 'Logged out from all devices' })
   } catch (err: any) {
     res.status(500).json({ message: 'Server error', error: err.message })

@@ -1,7 +1,7 @@
 declare const router: import("express-serve-static-core").Router;
 /**
  * @swagger
- * /auth/reset-password:
+ * /api/v1/auth/reset-password:
  *   post:
  *     summary: Reset password using token
  *     tags: [Auth]

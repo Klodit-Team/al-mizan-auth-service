@@ -1,2 +1,2 @@
-import { Role } from '@prisma/client';
+export {};
 //# sourceMappingURL=User.js.map

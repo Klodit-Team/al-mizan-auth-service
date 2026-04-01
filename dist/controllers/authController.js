@@ -3,6 +3,7 @@ import prisma from '../config/db.js';
 import * as userService from '../services/userService.js';
 import * as tokenService from '../services/tokenService.js';
 import { client as redis } from '../config/redis.js';
+import { publishToExchange } from '../rabbitmq.js';
 const MAX_ATTEMPTS = 5;
 const BLOCK_DURATION = 15 * 60; // 15 minutes
 const COOKIE_OPTIONS = {
@@ -37,11 +38,16 @@ const resetBruteForce = async (email) => {
     await redis.del(`login:blocked:${email}`);
 };
 // ─── Controllers ───────────────────────────────────────────────────────────
+// auth.controller.ts
 export const register = async (req, res) => {
     try {
-        const { email, password } = req.body;
-        if (!email || !password) {
-            res.status(400).json({ message: 'Email and password required' });
+        const { email, password, role, langue, nom, prenom, telephone, denomination, nif, nis, registre_commerce, adresse, wilaya, commune, type, 
+        // SERVICE_CONTRACTANT
+        code_service, secteur_activite, ordonnateur, 
+        // OPERATEUR_ECONOMIQUE
+        qualifications, categories, } = req.body;
+        if (!email || !password || !role) {
+            res.status(400).json({ message: 'Email, password and role are required' });
             return;
         }
         const user = await prisma.$transaction(async (t) => {
@@ -51,7 +57,31 @@ export const register = async (req, res) => {
             const hashed = await bcrypt.hash(password, 12);
             return t.user.create({ data: { email, password: hashed } });
         });
-        res.status(201).json({ message: 'User created', user: { id: user.id, email: user.email } });
+        await publishToExchange('user.registered', {
+            event_id: crypto.randomUUID(),
+            user_id: user.id,
+            email: user.email,
+            role,
+            langue,
+            timestamp: new Date().toISOString(),
+            // Profil
+            nom,
+            prenom,
+            telephone,
+            // Organisation
+            denomination,
+            nif,
+            nis,
+            registre_commerce,
+            adresse,
+            wilaya,
+            commune,
+            type,
+            // Conditionnel selon role
+            ...(role === 'SERVICE_CONTRACTANT' && { code_service, secteur_activite, ordonnateur }),
+            ...(role === 'OPERATEUR_ECONOMIQUE' && { qualifications, categories }),
+        });
+        res.status(201).json({ message: 'Account created. Verify your email.', user_id: user.id });
     }
     catch (err) {
         if (err.message === 'EMAIL_EXISTS') {
@@ -96,7 +126,7 @@ export const login = async (req, res) => {
         res.cookie('refresh_token', refreshToken, {
             ...COOKIE_OPTIONS,
             maxAge: 7 * 24 * 60 * 60 * 1000,
-            path: '/auth/refresh',
+            path: '/api/v1/auth/refresh',
         });
         res.json({ message: 'Logged in successfully' });
     }
@@ -128,7 +158,7 @@ export const refresh = async (req, res) => {
         res.cookie('refresh_token', newRefreshToken, {
             ...COOKIE_OPTIONS,
             maxAge: 7 * 24 * 60 * 60 * 1000,
-            path: '/auth/refresh',
+            path: '/api/v1/auth/refresh',
         });
         res.json({ message: 'Token refreshed' });
     }
@@ -146,7 +176,7 @@ export const logout = async (req, res) => {
             await prisma.session.deleteMany({ where: { token: refreshToken } });
         }
         res.clearCookie('access_token');
-        res.clearCookie('refresh_token', { path: '/auth/refresh' });
+        res.clearCookie('refresh_token', { path: '/api/v1/auth/refresh' });
         res.json({ message: 'Logged out successfully' });
     }
     catch (err) {
@@ -162,7 +192,7 @@ export const logoutAll = async (req, res) => {
             await tokenService.revokeAllRefreshTokens(decoded.userId);
         }
         res.clearCookie('access_token');
-        res.clearCookie('refresh_token', { path: '/auth/refresh' });
+        res.clearCookie('refresh_token', { path: '/api/v1/auth/refresh' });
         res.json({ message: 'Logged out from all devices' });
     }
     catch (err) {
@@ -182,8 +212,9 @@ export const deleteSession = async (req, res) => {
     res.json({ message: 'Session revoked' });
 };
 // ─── Password Reset ────────────────────────────────────────────────────────
+import crypto from 'crypto';
 const generateResetToken = () => {
-    return require('crypto').randomBytes(32).toString('hex');
+    return crypto.randomBytes(32).toString('hex');
 };
 const RESET_TOKEN_EXPIRY = 1 * 60 * 60 * 1000; // 1 heure
 const getValidResetRecord = async (token) => {
@@ -224,6 +255,7 @@ export const forgotPassword = async (req, res) => {
         // TODO: await sendResetEmail(user.email, token)
         res.status(200).json({
             message: 'If email exists, a reset link has been sent',
+            token,
         });
     }
     catch (err) {

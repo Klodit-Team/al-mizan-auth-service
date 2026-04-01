@@ -10,10 +10,9 @@ export const findById = async (id: string): Promise<any | null> => {
 
 export const createUser = async (
   email: string,
-  password: string,
-  role?: string
+  password: string
 ): Promise<any> => {
-  return await prisma.user.create({ data: { email, password, role: (role as any) } })
+  return await prisma.user.create({ data: { email, password } })
 }
 
 export default { findByEmail, findById, createUser }
