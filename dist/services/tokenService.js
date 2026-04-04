@@ -3,9 +3,20 @@ import crypto from 'crypto';
 import prisma from '../config/db.js';
 import { client as redis } from '../config/redis.js';
 const MAX_SESSIONS = 3;
+function resolveAccessTokenSecret() {
+    const raw = process.env.ACCESS_TOKEN_SECRET;
+    const secret = typeof raw === 'string' ? raw.trim() : '';
+    if (secret.length > 0) {
+        return secret;
+    }
+    if (process.env.NODE_ENV !== 'production') {
+        return 'al_mizan_access_secret_fallback_dev';
+    }
+    throw new Error('ACCESS_TOKEN_SECRET is required in production');
+}
 export const generateAccessToken = (userId, email) => {
     const opts = { expiresIn: process.env.ACCESS_TOKEN_EXPIRY };
-    return jwt.sign({ userId, email }, process.env.ACCESS_TOKEN_SECRET, opts);
+    return jwt.sign({ userId, email }, resolveAccessTokenSecret(), opts);
 };
 export const generateRefreshToken = async (userId, deviceInfo, ipAddress, tx) => {
     const client = tx ?? prisma;
@@ -33,7 +44,7 @@ export const generateRefreshToken = async (userId, deviceInfo, ipAddress, tx) =>
     return token;
 };
 export const verifyAccessToken = (token) => {
-    return jwt.verify(token, process.env.ACCESS_TOKEN_SECRET);
+    return jwt.verify(token, resolveAccessTokenSecret());
 };
 export const blacklistToken = async (token) => {
     const decoded = jwt.decode(token);

@@ -35,12 +35,25 @@ app.get('/health', (_req, res) => res.json({ status: 'ok' }))
 const start = async (): Promise<void> => {
   await connect()
   await init()
-  await connectRabbitMQ()
-  await consumeUserRegisteredResponse()
-  await consumeUserRegisteredFailed()
-  app.listen(process.env.PORT, () => {
-    console.log(`🚀 Auth service running on port ${process.env.PORT}`)
-    console.log(`📚 Swagger UI available at http://localhost:${process.env.PORT}/api-docs`)
+
+  // RabbitMQ is optional for auth HTTP availability.
+  // If it is down, auth endpoints should still boot to avoid gateway 502.
+  if (process.env.RABBITMQ_URL) {
+    try {
+      await connectRabbitMQ()
+      await consumeUserRegisteredResponse()
+      await consumeUserRegisteredFailed()
+    } catch (error) {
+      console.warn('⚠️ RabbitMQ unavailable. Continuing without event consumers.', error)
+    }
+  } else {
+    console.warn('⚠️ RABBITMQ_URL not set. Starting auth service without RabbitMQ integration.')
+  }
+
+  const port = Number(process.env.PORT ?? 3001)
+  app.listen(port, () => {
+    console.log(`🚀 Auth service running on port ${port}`)
+    console.log(`📚 Swagger UI available at http://localhost:${port}/api-docs`)
   })
 }
 
