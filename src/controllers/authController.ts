@@ -8,6 +8,377 @@ import { publishToExchange } from '../rabbitmq.js'
 
 const MAX_ATTEMPTS = 5
 const BLOCK_DURATION = 15 * 60 // 15 minutes
+const SUPPORTED_LANGUAGES = new Set(['fr', 'ar'])
+const SUPPORTED_ORGANISATION_TYPES = new Set([
+  'EPA',
+  'EPIC',
+  'MINISTERE',
+  'ENTREPRISE_PRIVEE',
+  'ENTREPRISE_PUBLIQUE',
+  'GROUPEMENT',
+])
+
+type RegisterRole = 'SERVICE_CONTRACTANT' | 'OPERATEUR_ECONOMIQUE'
+type AuthRoleName =
+  | 'ADMIN'
+  | 'SERVICE_CONTRACTANT'
+  | 'OPERATEUR_ECONOMIQUE'
+  | 'MEMBRE_COMMISSION'
+  | 'CONTROLEUR'
+type DashboardUserType = 'admin' | 'contractant' | 'operateur'
+
+interface UsersServiceUserRoleAssignment {
+  role?: {
+    name?: string
+  }
+}
+
+interface UserRegisteredEventPayload {
+  event_id: string
+  user_id: string
+  email: string
+  role: RegisterRole
+  langue?: string
+  timestamp: string
+  nom: string
+  prenom: string
+  telephone?: string
+  denomination: string
+  nif?: string
+  nis?: string
+  registre_commerce?: string
+  adresse?: string
+  wilaya?: string
+  commune?: string
+  type: string
+  code_service?: string
+  secteur_activite?: string
+  ordonnateur?: string
+  qualifications?: string
+  categories?: string
+}
+
+interface UsersServiceRole {
+  id: string
+  name: string
+}
+
+class UsersServiceRequestError extends Error {
+  status: number
+
+  constructor(status: number, message: string) {
+    super(message)
+    this.status = status
+    this.name = 'UsersServiceRequestError'
+  }
+}
+
+const USERS_SERVICE_BASE_URL = (process.env.USERS_SERVICE_URL ?? 'http://localhost:3002').replace(/\/+$/, '')
+const USERS_SERVICE_PREFIX = (() => {
+  const prefix = (process.env.USERS_SERVICE_PREFIX ?? '/api/v1').trim()
+  if (!prefix) return ''
+  return prefix.startsWith('/') ? prefix.replace(/\/+$/, '') : `/${prefix.replace(/\/+$/, '')}`
+})()
+
+const usersServiceUrl = (path: string): string => {
+  const normalizedPath = path.startsWith('/') ? path : `/${path}`
+  return `${USERS_SERVICE_BASE_URL}${USERS_SERVICE_PREFIX}${normalizedPath}`
+}
+
+const getUsersServiceErrorMessage = (payload: unknown, fallback: string): string => {
+  if (payload && typeof payload === 'object' && 'message' in payload) {
+    const message = (payload as { message: unknown }).message
+    if (Array.isArray(message)) {
+      return message.join(', ')
+    }
+    if (typeof message === 'string') {
+      return message
+    }
+  }
+  return fallback
+}
+
+const usersServiceRequest = async <T>(
+  method: string,
+  path: string,
+  body?: unknown,
+): Promise<T> => {
+  const headers = new Headers()
+  if (body !== undefined) {
+    headers.set('Content-Type', 'application/json')
+  }
+
+  const response = await fetch(usersServiceUrl(path), {
+    method,
+    headers,
+    body: body !== undefined ? JSON.stringify(body) : undefined,
+  })
+
+  const raw = await response.text()
+  let payload: unknown = null
+  if (raw) {
+    try {
+      payload = JSON.parse(raw)
+    } catch {
+      payload = raw
+    }
+  }
+
+  if (!response.ok) {
+    const fallbackMessage = typeof payload === 'string' ? payload : response.statusText
+    throw new UsersServiceRequestError(
+      response.status,
+      getUsersServiceErrorMessage(payload, fallbackMessage),
+    )
+  }
+
+  return payload as T
+}
+
+const resolveFallbackLanguage = (langue: string | undefined): 'fr' | 'ar' => {
+  if (langue === 'ar') {
+    return 'ar'
+  }
+  return 'fr'
+}
+
+const resolveFallbackOrganisationType = (type: string | undefined): string => {
+  if (typeof type !== 'string' || !type.trim()) {
+    return 'ENTREPRISE_PRIVEE'
+  }
+  return type.trim().toUpperCase()
+}
+
+const getRoleIdForFallback = async (roleName: RegisterRole): Promise<string> => {
+  const findRole = (roles: UsersServiceRole[]): UsersServiceRole | undefined =>
+    roles.find((role) => role.name === roleName)
+
+  let roles = await usersServiceRequest<UsersServiceRole[]>('GET', '/roles')
+  let targetRole = findRole(roles)
+
+  if (!targetRole) {
+    await usersServiceRequest<UsersServiceRole[]>('POST', '/roles/seed-defaults')
+    roles = await usersServiceRequest<UsersServiceRole[]>('GET', '/roles')
+    targetRole = findRole(roles)
+  }
+
+  if (!targetRole) {
+    throw new Error(`Role ${roleName} not found in users-service`)
+  }
+
+  return targetRole.id
+}
+
+const normalizeAuthRoleName = (value: unknown): AuthRoleName | null => {
+  if (typeof value !== 'string') {
+    return null
+  }
+
+  const normalized = value
+    .trim()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[\s-]+/g, '_')
+    .toUpperCase()
+
+  if (normalized === 'ADMIN') return 'ADMIN'
+  if (normalized === 'SERVICE_CONTRACTANT' || normalized === 'CONTRACTANT' || normalized === 'SERVICECONTRACTANT') {
+    return 'SERVICE_CONTRACTANT'
+  }
+  if (
+    normalized === 'OPERATEUR_ECONOMIQUE' ||
+    normalized === 'OPERATEUR' ||
+    normalized === 'OPERATEURECONOMIQUE' ||
+    (normalized.includes('OPERATEUR') && normalized.includes('ECONOM'))
+  ) {
+    return 'OPERATEUR_ECONOMIQUE'
+  }
+  if (normalized === 'MEMBRE_COMMISSION') return 'MEMBRE_COMMISSION'
+  if (normalized === 'CONTROLEUR') return 'CONTROLEUR'
+
+  return null
+}
+
+const mapRoleToDashboardUserType = (role: AuthRoleName | null): DashboardUserType | null => {
+  if (!role) {
+    return null
+  }
+
+  if (role === 'ADMIN') {
+    return 'admin'
+  }
+
+  if (role === 'OPERATEUR_ECONOMIQUE') {
+    return 'operateur'
+  }
+
+  if (role === 'SERVICE_CONTRACTANT') {
+    return 'contractant'
+  }
+
+  return null
+}
+
+const resolvePrimaryUserRole = async (userId: string): Promise<AuthRoleName | null> => {
+  try {
+    const assignments = await usersServiceRequest<UsersServiceUserRoleAssignment[]>('GET', `/user-roles/${userId}`)
+    if (!Array.isArray(assignments)) {
+      return null
+    }
+
+    for (const assignment of assignments) {
+      const normalized = normalizeAuthRoleName(assignment.role?.name)
+      if (normalized) {
+        return normalized
+      }
+    }
+
+    return null
+  } catch (error) {
+    console.warn(`[AUTH] Unable to resolve roles for user_id=${userId}:`, error)
+    return null
+  }
+}
+
+const provisionRegistrationFallback = async (
+  event: UserRegisteredEventPayload,
+  canonicalRole: RegisterRole,
+): Promise<void> => {
+  const organisation = await usersServiceRequest<{ id: string }>('POST', '/organisations', {
+    userId: event.user_id,
+    eventId: event.event_id,
+    denomination: event.denomination,
+    nif: event.nif,
+    nis: event.nis,
+    registreCommerce: event.registre_commerce,
+    adresse: event.adresse,
+    wilaya: event.wilaya,
+    commune: event.commune,
+    email: event.email,
+    type: resolveFallbackOrganisationType(event.type),
+  })
+
+  try {
+    await usersServiceRequest('POST', '/profiles', {
+      userId: event.user_id,
+      nom: event.nom,
+      prenom: event.prenom,
+      telephone: event.telephone,
+      langue: resolveFallbackLanguage(event.langue),
+    })
+  } catch (error) {
+    if (!(error instanceof UsersServiceRequestError) || error.status !== 409) {
+      throw error
+    }
+
+    await usersServiceRequest('GET', `/profiles/user/${event.user_id}`)
+  }
+
+  if (canonicalRole === 'SERVICE_CONTRACTANT') {
+    await usersServiceRequest('POST', '/services-contractants', {
+      organisationId: organisation.id,
+      userId: event.user_id,
+      codeService: event.code_service,
+      secteurActivite: event.secteur_activite,
+      ordonateur: event.ordonnateur,
+    })
+  }
+
+  if (canonicalRole === 'OPERATEUR_ECONOMIQUE') {
+    await usersServiceRequest('POST', '/operateurs-economiques', {
+      organisationId: organisation.id,
+      userId: event.user_id,
+      qualifications: event.qualifications,
+      categories: event.categories,
+      isEligible: true,
+    })
+  }
+
+  const roleId = await getRoleIdForFallback(canonicalRole)
+  try {
+    await usersServiceRequest('POST', '/user-roles', {
+      userId: event.user_id,
+      roleId,
+    })
+  } catch (error) {
+    if (!(error instanceof UsersServiceRequestError) || error.status !== 409) {
+      throw error
+    }
+  }
+}
+
+const normalizeRegistrationRole = (role: unknown): RegisterRole | null => {
+  if (typeof role !== 'string') {
+    return null
+  }
+
+  const normalized = role
+    .trim()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[\s-]+/g, '_')
+    .toUpperCase()
+
+  if (
+    normalized === 'SERVICE_CONTRACTANT' ||
+    normalized === 'CONTRACTANT' ||
+    normalized === 'SERVICECONTRACTANT'
+  ) {
+    return 'SERVICE_CONTRACTANT'
+  }
+
+  if (
+    normalized === 'OPERATEUR_ECONOMIQUE' ||
+    normalized === 'OPERATEUR' ||
+    normalized === 'OPERATEURECONOMIQUE' ||
+    (normalized.includes('OPERATEUR') && normalized.includes('ECONOM'))
+  ) {
+    return 'OPERATEUR_ECONOMIQUE'
+  }
+
+  return null
+}
+
+const isNonEmptyString = (value: unknown): value is string =>
+  typeof value === 'string' && value.trim().length > 0
+
+const validateRegisterPayload = (
+  payload: Record<string, unknown>,
+  canonicalRole: RegisterRole,
+): string | null => {
+  const requiredFields = ['email', 'password', 'nom', 'prenom', 'denomination', 'type']
+
+  for (const field of requiredFields) {
+    if (!isNonEmptyString(payload[field])) {
+      return `${field} is required`
+    }
+  }
+
+  if ((payload.password as string).length < 8) {
+    return 'password must be at least 8 characters'
+  }
+
+  if (!SUPPORTED_ORGANISATION_TYPES.has((payload.type as string).trim().toUpperCase())) {
+    return 'Invalid organisation type'
+  }
+
+  if (payload.langue !== undefined && !SUPPORTED_LANGUAGES.has(String(payload.langue).trim())) {
+    return 'Invalid langue. Allowed values: fr or ar'
+  }
+
+  if (payload.telephone !== undefined) {
+    const telephone = String(payload.telephone).trim()
+    if (telephone.length < 8 || telephone.length > 20) {
+      return 'telephone must be between 8 and 20 characters'
+    }
+  }
+
+  if (canonicalRole === 'SERVICE_CONTRACTANT' && !isNonEmptyString(payload.code_service)) {
+    return 'code_service is required for SERVICE_CONTRACTANT'
+  }
+
+  return null
+}
 
 const COOKIE_OPTIONS = {
   httpOnly: true,
@@ -54,6 +425,8 @@ const resetBruteForce = async (email: string): Promise<void> => {
 // auth.controller.ts
  export const register = async (req: Request, res: Response): Promise<void> => {
   try {
+    const payload = req.body as Record<string, unknown>
+
     const {
       email, password, role, langue,
       nom, prenom, telephone,
@@ -70,6 +443,21 @@ const resetBruteForce = async (email: string): Promise<void> => {
       return
     }
 
+    const canonicalRole = normalizeRegistrationRole(role)
+    if (!canonicalRole) {
+      res.status(400).json({
+        message:
+          'Invalid role. Allowed values: SERVICE_CONTRACTANT or OPERATEUR_ECONOMIQUE',
+      })
+      return
+    }
+
+    const validationError = validateRegisterPayload(payload, canonicalRole)
+    if (validationError) {
+      res.status(400).json({ message: validationError })
+      return
+    }
+
     const user = await prisma.$transaction(async (t) => {
       const exists = await t.user.findUnique({ where: { email } })
       if (exists) throw new Error('EMAIL_EXISTS')
@@ -77,11 +465,11 @@ const resetBruteForce = async (email: string): Promise<void> => {
       return t.user.create({ data: { email, password: hashed } })
     })
 
-    await publishToExchange('user.registered', {
+    const registrationEvent: UserRegisteredEventPayload = {
       event_id: crypto.randomUUID(),
       user_id: user.id,
       email: user.email,
-      role,
+      role: canonicalRole,
       langue,
       timestamp: new Date().toISOString(),
       // Profil
@@ -98,9 +486,28 @@ const resetBruteForce = async (email: string): Promise<void> => {
       commune,
       type,
       // Conditionnel selon role
-      ...(role === 'SERVICE_CONTRACTANT' && { code_service, secteur_activite, ordonnateur }),
-      ...(role === 'OPERATEUR_ECONOMIQUE' && { qualifications, categories }),
-    })
+      ...(canonicalRole === 'SERVICE_CONTRACTANT' && { code_service, secteur_activite, ordonnateur }),
+      ...(canonicalRole === 'OPERATEUR_ECONOMIQUE' && { qualifications, categories }),
+    }
+
+    const published = await publishToExchange('user.registered', registrationEvent)
+
+    if (!published) {
+      try {
+        await provisionRegistrationFallback(registrationEvent, canonicalRole)
+        console.warn('[REGISTER] RabbitMQ unavailable: provisioned user directly via users-service fallback')
+      } catch (fallbackError) {
+        console.error('[REGISTER] RabbitMQ publish and users-service fallback both failed:', fallbackError)
+        await prisma.user.delete({ where: { id: user.id } }).catch((cleanupError) => {
+          console.error('[REGISTER] Failed to rollback auth user after provisioning failure:', cleanupError)
+        })
+
+        res.status(503).json({
+          message: 'Registration temporarily unavailable. Please try again.',
+        })
+        return
+      }
+    }
 
     res.status(201).json({ message: 'Account created. Verify your email.', user_id: user.id })
 
@@ -153,6 +560,9 @@ export const login = async (req: Request, res: Response): Promise<void> => {
       return { accessToken, refreshToken }
     })
 
+    const resolvedRole = await resolvePrimaryUserRole(user.id)
+    const resolvedUserType = mapRoleToDashboardUserType(resolvedRole)
+
     res.cookie('access_token', accessToken, { ...COOKIE_OPTIONS, maxAge: 15 * 60 * 1000 })
     res.cookie('refresh_token', refreshToken, {
       ...COOKIE_OPTIONS,
@@ -160,7 +570,17 @@ export const login = async (req: Request, res: Response): Promise<void> => {
   path: '/api/v1/auth/refresh',
     })
 
-    res.json({ message: 'Logged in successfully' })
+    res.json({
+      message: 'Logged in successfully',
+      role: resolvedRole,
+      userType: resolvedUserType,
+      user: {
+        userId: user.id,
+        email: user.email,
+        role: resolvedRole,
+        userType: resolvedUserType,
+      },
+    })
   } catch (err: any) {
     res.status(500).json({ message: 'Server error', error: err.message })
   }
@@ -239,7 +659,22 @@ export const logoutAll = async (req: Request, res: Response): Promise<void> => {
 }
 
 export const me = async (req: Request, res: Response): Promise<void> => {
-  res.json({ user: (req as any).user })
+  const identity = (req as any).user as { userId?: string; email?: string; iat?: number; exp?: number }
+  if (!identity?.userId || !identity?.email) {
+    res.status(401).json({ message: 'Invalid user context' })
+    return
+  }
+
+  const resolvedRole = await resolvePrimaryUserRole(identity.userId)
+  const resolvedUserType = mapRoleToDashboardUserType(resolvedRole)
+
+  res.json({
+    user: {
+      ...identity,
+      role: resolvedRole,
+      userType: resolvedUserType,
+    },
+  })
 }
 
 export const sessions = async (req: Request, res: Response): Promise<void> => {

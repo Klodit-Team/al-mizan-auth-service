@@ -6,6 +6,29 @@ import { client as redis } from '../config/redis.js';
 import { publishToExchange } from '../rabbitmq.js';
 const MAX_ATTEMPTS = 5;
 const BLOCK_DURATION = 15 * 60; // 15 minutes
+const normalizeRegistrationRole = (role) => {
+    if (typeof role !== 'string') {
+        return null;
+    }
+    const normalized = role
+        .trim()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/[\s-]+/g, '_')
+        .toUpperCase();
+    if (normalized === 'SERVICE_CONTRACTANT' ||
+        normalized === 'CONTRACTANT' ||
+        normalized === 'SERVICECONTRACTANT') {
+        return 'SERVICE_CONTRACTANT';
+    }
+    if (normalized === 'OPERATEUR_ECONOMIQUE' ||
+        normalized === 'OPERATEUR' ||
+        normalized === 'OPERATEURECONOMIQUE' ||
+        (normalized.includes('OPERATEUR') && normalized.includes('ECONOM'))) {
+        return 'OPERATEUR_ECONOMIQUE';
+    }
+    return null;
+};
 const COOKIE_OPTIONS = {
     httpOnly: true,
     secure: true,
@@ -50,6 +73,13 @@ export const register = async (req, res) => {
             res.status(400).json({ message: 'Email, password and role are required' });
             return;
         }
+        const canonicalRole = normalizeRegistrationRole(role);
+        if (!canonicalRole) {
+            res.status(400).json({
+                message: 'Invalid role. Allowed values: SERVICE_CONTRACTANT or OPERATEUR_ECONOMIQUE',
+            });
+            return;
+        }
         const user = await prisma.$transaction(async (t) => {
             const exists = await t.user.findUnique({ where: { email } });
             if (exists)
@@ -61,7 +91,7 @@ export const register = async (req, res) => {
             event_id: crypto.randomUUID(),
             user_id: user.id,
             email: user.email,
-            role,
+            role: canonicalRole,
             langue,
             timestamp: new Date().toISOString(),
             // Profil
@@ -78,8 +108,8 @@ export const register = async (req, res) => {
             commune,
             type,
             // Conditionnel selon role
-            ...(role === 'SERVICE_CONTRACTANT' && { code_service, secteur_activite, ordonnateur }),
-            ...(role === 'OPERATEUR_ECONOMIQUE' && { qualifications, categories }),
+            ...(canonicalRole === 'SERVICE_CONTRACTANT' && { code_service, secteur_activite, ordonnateur }),
+            ...(canonicalRole === 'OPERATEUR_ECONOMIQUE' && { qualifications, categories }),
         });
         res.status(201).json({ message: 'Account created. Verify your email.', user_id: user.id });
     }

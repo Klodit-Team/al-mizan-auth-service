@@ -28,10 +28,10 @@ export function getChannel(): amqp.Channel {
   }
   return channel;
 }
-export async function publishToExchange(routingKey: string,message: any): Promise<void> {
+export async function publishToExchange(routingKey: string,message: any): Promise<boolean> {
   if (!channel) {
     console.error('RabbitMQ channel not established');
-    return;
+    return false;
   }
   try {
     channel.publish(
@@ -41,8 +41,10 @@ export async function publishToExchange(routingKey: string,message: any): Promis
       { persistent: true }
     );
     console.log(`Published [${routingKey}]:`, message);
+    return true;
   } catch (error) {
     console.error('Error publishing to RabbitMQ:', error);
+    return false;
   }
 }
 

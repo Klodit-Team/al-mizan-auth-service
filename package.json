@@ -6,7 +6,8 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "start": "node dist/app.js",
-    "dev": "tsx watch src/app.ts"
+    "dev": "tsx watch src/app.ts",
+    "db:seed": "prisma db seed"
   },
   "keywords": [],
   "author": "",
@@ -43,5 +44,8 @@
     "ts-node": "^10.9.2",
     "tsx": "^4.21.0",
     "typescript": "^5.9.3"
+  },
+  "prisma": {
+    "seed": "node prisma/seed.mjs"
   }
 }
