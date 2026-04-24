@@ -1,0 +1,26 @@
+name: Deploy auth-service to GCP
+
+on:
+  push:
+    branches:
+      - main
+      - master
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Deploy to GCP via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.GCP_HOST }}
+          username: ${{ secrets.GCP_USERNAME }}
+          key: ${{ secrets.GCP_SSH_KEY }}
+          script: |
+            echo "🚀 Starting Deployment for auth-service..."
+            cd ~/auth-service
+            git pull
+            cd ~/al-mizan-deployment
+            sudo docker-compose up -d --build auth-service
+            echo "✅ Deployment Successful!"
