@@ -383,7 +383,8 @@ const validateRegisterPayload = (
 const COOKIE_OPTIONS = {
   httpOnly: true,
   secure: true,
-  sameSite: 'strict' as const,
+  sameSite: 'lax' as const,
+  domain: process.env.COOKIE_DOMAIN || '.klodit.app',
 }
 
 // ─── Brute force helpers ───────────────────────────────────────────────────
