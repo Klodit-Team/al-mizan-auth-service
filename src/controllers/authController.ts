@@ -384,7 +384,7 @@ const COOKIE_OPTIONS = {
   httpOnly: true,
   secure: true,
   sameSite: 'none' as const,
-  domain: process.env.COOKIE_DOMAIN || '.klodit.app',
+  domain: '.klodit.app',
 }
 
 // ─── Brute force helpers ───────────────────────────────────────────────────
@@ -634,8 +634,8 @@ export const logout = async (req: Request, res: Response): Promise<void> => {
       await prisma.session.deleteMany({ where: { token: refreshToken } })
     }
 
-    res.clearCookie('access_token')
-  res.clearCookie('refresh_token', { path: '/api/v1/auth/refresh' })
+    res.clearCookie('access_token', COOKIE_OPTIONS)
+    res.clearCookie('refresh_token', { ...COOKIE_OPTIONS, path: '/api/v1/auth/refresh' })
     res.json({ message: 'Logged out successfully' })
   } catch (err: any) {
     res.status(500).json({ message: 'Server error', error: err.message })
@@ -651,8 +651,8 @@ export const logoutAll = async (req: Request, res: Response): Promise<void> => {
       await tokenService.revokeAllRefreshTokens(decoded.userId)
     }
 
-    res.clearCookie('access_token')
-  res.clearCookie('refresh_token', { path: '/api/v1/auth/refresh' })
+    res.clearCookie('access_token', COOKIE_OPTIONS)
+    res.clearCookie('refresh_token', { ...COOKIE_OPTIONS, path: '/api/v1/auth/refresh' })
     res.json({ message: 'Logged out from all devices' })
   } catch (err: any) {
     res.status(500).json({ message: 'Server error', error: err.message })
