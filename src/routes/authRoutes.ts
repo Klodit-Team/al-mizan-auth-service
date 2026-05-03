@@ -1,6 +1,8 @@
 import { Router } from 'express'
 import * as authController from '../controllers/authController.js'
 import authenticate from '../middleware/authMiddleware.js'
+import { validateSendOtp, validateVerifyOtp } from '../middleware/authMiddleware.js';
+import { OtpController } from '../controllers/authController.js';
 
 const router = Router()
 
@@ -134,20 +136,42 @@ router.post('/api/v1/auth/register', authController.register)
  *               type: string
  *               example: Catégorie 1
  */
-router.post('/api/v1/auth/login', authController.login)
 
 /**
  * @swagger
- * /api/v1/auth/refresh:
+ * /api/v1/auth/login:
  *   post:
- *     summary: Refresh access token
+ *     summary: Authentifier un utilisateur et créer une session
  *     tags: [Auth]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/LoginRequest'
  *     responses:
  *       200:
- *         description: Token refreshed
- *       403:
- *         description: Invalid refresh token
+ *         description: Connexion réussie
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: Login successful
+ *                 user:
+ *                   $ref: '#/components/schemas/UserResponse'
+ *       401:
+ *         description: Identifiants invalides (email ou mot de passe incorrect)
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       500:
+ *         description: Erreur serveur
  */
+router.post('/api/v1/auth/login', authController.login)
 router.post('/api/v1/auth/refresh', authController.refresh)
 
 /**
@@ -320,4 +344,136 @@ router.post('/api/v1/auth/reset-password', authController.resetPassword)
  *       400:
  *         description: Invalid token or password criteria not met
  */
+
+// src/routes/otp.routes.ts
+
+const otpController = new OtpController();
+
+// Middleware de validation → Controller
+router.post('/otp/send',   validateSendOtp,   (req, res) => otpController.send(req, res));
+router.post('/otp/verify', validateVerifyOtp, (req, res) => otpController.verify(req, res));
+// src/routes/authRoutes.ts
+
+/**
+ * @swagger
+ * tags:
+ *   name: OTP
+ *   description: Authentification par code OTP envoyé par email
+ */
+
+/**
+ * @swagger
+ * /otp/send:
+ *   post:
+ *     summary: Envoyer un code OTP par email
+ *     tags: [OTP]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - email
+ *             properties:
+ *               email:
+ *                 type: string
+ *                 format: email
+ *                 example: user@example.com
+ *     responses:
+ *       200:
+ *         description: OTP envoyé avec succès
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 message:
+ *                   type: string
+ *                   example: "Code OTP envoyé à user@example.com"
+ *       400:
+ *         description: Email invalide ou manquant
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: false
+ *                 message:
+ *                   type: string
+ *                   example: "Email invalide."
+ *       500:
+ *         description: Erreur serveur lors de l'envoi
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: false
+ *                 message:
+ *                   type: string
+ *                   example: "Échec de l'envoi du code OTP."
+ */
+
+/**
+ * @swagger
+ * /otp/verify:
+ *   post:
+ *     summary: Vérifier le code OTP soumis par l'utilisateur
+ *     tags: [OTP]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - email
+ *               - code
+ *             properties:
+ *               email:
+ *                 type: string
+ *                 format: email
+ *                 example: user@example.com
+ *               code:
+ *                 type: string
+ *                 minLength: 6
+ *                 maxLength: 6
+ *                 example: "482931"
+ *     responses:
+ *       200:
+ *         description: OTP vérifié avec succès
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 message:
+ *                   type: string
+ *                   example: "Authentification réussie !"
+ *       400:
+ *         description: Code incorrect / expiré / déjà utilisé
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: false
+ *                 message:
+ *                   type: string
+ *                   example: "Code incorrect."
+ */
+
 export default router

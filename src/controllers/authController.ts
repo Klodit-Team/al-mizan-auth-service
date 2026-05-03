@@ -5,6 +5,8 @@ import * as userService from '../services/userService.js'
 import * as tokenService from '../services/tokenService.js'
 import { client as redis } from '../config/redis.js'
 import { publishToExchange } from '../rabbitmq.js'
+import { OtpService } from '../services/otpService.js';
+
 
 const MAX_ATTEMPTS = 5
 const BLOCK_DURATION = 15 * 60 // 15 minutes
@@ -382,9 +384,12 @@ const validateRegisterPayload = (
 
 const COOKIE_OPTIONS = {
   httpOnly: true,
-  secure: true,
-  sameSite: 'none' as const,
-  domain: '.klodit.app',
+  // Secure doit être false en développement (HTTP) et true en production (HTTPS)
+  secure: process.env.NODE_ENV === 'production',
+  // On force le type pour que TypeScript soit content
+  sameSite: (process.env.NODE_ENV === 'production' ? 'none' : 'lax') as 'none' | 'lax',
+  // Utilise la variable d'environnement ou rien du tout pour localhost
+  domain: process.env.DOMAIN || undefined,
 }
 
 // ─── Brute force helpers ───────────────────────────────────────────────────
@@ -816,4 +821,41 @@ export const resetPassword = async (req: Request, res: Response): Promise<void> 
     res.status(500).json({ message: 'Server error', error: err.message })
   }
 }
-export default { register, login, refresh, logout, logoutAll, me, sessions, deleteSession, forgotPassword, verifyResetToken, resetPassword }
+
+// Otp controller
+// src/controllers/otp.controller.ts
+
+
+const otpService = new OtpService();
+
+export class OtpController {
+
+  // POST /otp/send
+  async send(req: Request, res: Response): Promise<void> {
+    const { email } = req.body;
+
+    try {
+      await otpService.sendOtp(email);
+      res.status(200).json({
+        success: true,
+        message: `Code OTP envoyé à ${email}`,
+      });
+    } catch (error) {
+      console.error('Erreur envoi OTP:', error);
+      res.status(500).json({
+        success: false,
+        message: "Échec de l'envoi du code OTP.",
+      });
+    }
+  }
+
+  // POST /otp/verify
+  verify(req: Request, res: Response): void {
+    const { email, code } = req.body;
+
+    const result = otpService.verifyOtp(email, code);
+
+    res.status(result.success ? 200 : 400).json(result);
+  }
+}
+export default { register,OtpController, login, refresh, logout, logoutAll, me, sessions, deleteSession, forgotPassword, verifyResetToken, resetPassword }
