@@ -513,6 +513,7 @@ const resetBruteForce = async (email: string): Promise<void> => {
     res.status(201).json({ message: 'Account created. Verify your email.', user_id: user.id })
 
   } catch (err: any) {
+    console.error("REGISTER_CRASH:", err);
     if (err.message === 'EMAIL_EXISTS') {
       res.status(400).json({ message: 'Email already exists' })
       return
@@ -583,6 +584,7 @@ export const login = async (req: Request, res: Response): Promise<void> => {
       },
     })
   } catch (err: any) {
+    console.error("LOGIN_CRASH:", err);
     res.status(500).json({ message: 'Server error', error: err.message })
   }
 }
@@ -620,6 +622,7 @@ export const refresh = async (req: Request, res: Response): Promise<void> => {
 
     res.json({ message: 'Token refreshed' })
   } catch (err: any) {
+    console.error("LOGIN_CRASH:", err);
     res.status(500).json({ message: 'Server error', error: err.message })
   }
 }
@@ -638,6 +641,7 @@ export const logout = async (req: Request, res: Response): Promise<void> => {
     res.clearCookie('refresh_token', { ...COOKIE_OPTIONS, path: '/api/v1/auth/refresh' })
     res.json({ message: 'Logged out successfully' })
   } catch (err: any) {
+    console.error("LOGIN_CRASH:", err);
     res.status(500).json({ message: 'Server error', error: err.message })
   }
 }
@@ -655,6 +659,7 @@ export const logoutAll = async (req: Request, res: Response): Promise<void> => {
     res.clearCookie('refresh_token', { ...COOKIE_OPTIONS, path: '/api/v1/auth/refresh' })
     res.json({ message: 'Logged out from all devices' })
   } catch (err: any) {
+    console.error("LOGIN_CRASH:", err);
     res.status(500).json({ message: 'Server error', error: err.message })
   }
 }
@@ -744,6 +749,7 @@ export const forgotPassword = async (req: Request, res: Response): Promise<void>
     
     })
   } catch (err: any) {
+    console.error("LOGIN_CRASH:", err);
     res.status(500).json({ message: 'Server error', error: err.message })
   }
 }
@@ -764,6 +770,7 @@ export const verifyResetToken = async (req: Request, res: Response): Promise<voi
       email: resetRecord.user.email,
     })
   } catch (err: any) {
+    console.error("LOGIN_CRASH:", err);
     res.status(400).json({ message: err.message })
   }
 }
@@ -813,6 +820,7 @@ export const resetPassword = async (req: Request, res: Response): Promise<void> 
     })
      res.status(200).json({ message: 'Password reset successfully. Please login with your new password.' })
   } catch (err: any) {
+    console.error("LOGIN_CRASH:", err);
     res.status(500).json({ message: 'Server error', error: err.message })
   }
 }
