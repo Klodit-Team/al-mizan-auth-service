@@ -470,7 +470,6 @@ const resetBruteForce = async (email: string): Promise<void> => {
       const hashed = await bcrypt.hash(password, 12)
       return t.user.create({ data: { email, password: hashed } })
     })
-
     const registrationEvent: UserRegisteredEventPayload = {
       event_id: crypto.randomUUID(),
       user_id: user.id,
@@ -547,6 +546,10 @@ export const login = async (req: Request, res: Response): Promise<void> => {
 
     if (!user || !valid) {
       const result = await recordFailedAttempt(email)
+      if (!user.isActive) {
+  res.status(403).json({ message: 'Account not activated. Check your email for the OTP code.' })
+  return
+}
 
       if (result.blocked) {
         res.status(429).json({ message: 'Too many failed attempts. Account locked for 15 minutes' })
@@ -858,12 +861,20 @@ export class OtpController {
   }
 
   // POST /otp/verify
-  verify(req: Request, res: Response): void {
-    const { email, code } = req.body;
+ verify(req: Request, res: Response): void {
+  const { email, code } = req.body;
 
-    const result = otpService.verifyOtp(email, code);
+  const result = otpService.verifyOtp(email, code);
 
-    res.status(result.success ? 200 : 400).json(result);
+  // ← AJOUTER : si OTP valide, activer le compte
+  if (result.success) {
+    prisma.user.update({
+      where: { email },
+      data: { isActive: true },
+    }).catch(err => console.error('[OTP] Failed to activate user:', err))
   }
+
+  res.status(result.success ? 200 : 400).json(result);
+}
 }
 export default { register,OtpController, login, refresh, logout, logoutAll, me, sessions, deleteSession, forgotPassword, verifyResetToken, resetPassword }
