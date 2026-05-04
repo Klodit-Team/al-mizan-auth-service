@@ -470,7 +470,6 @@ const resetBruteForce = async (email: string): Promise<void> => {
       const hashed = await bcrypt.hash(password, 12)
       return t.user.create({ data: { email, password: hashed } })
     })
-      await otpService.sendOtp(user.email)
     const registrationEvent: UserRegisteredEventPayload = {
       event_id: crypto.randomUUID(),
       user_id: user.id,
