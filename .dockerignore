@@ -6,4 +6,3 @@ coverage
 .github
 tests
 *.test.js
-.env

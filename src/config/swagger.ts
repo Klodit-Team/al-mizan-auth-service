@@ -8,12 +8,12 @@ const options = {
       version: '1.0.0',
       description: 'JWT Authentication Service with Refresh Token & Blacklist',
     },
-    servers: [
-      {
-        url: 'http://localhost:3005',
-        description: 'Development server',
-      },
-    ],
+   servers: [
+  {
+    url: process.env.SWAGGER_SERVER_URL || 'http://localhost:3001',
+    description: process.env.NODE_ENV === 'production' ? 'Production' : 'Development'
+  }
+],
     components: {
       securitySchemes: {
         cookieAuth: {
@@ -86,7 +86,11 @@ const options = {
       },
     },
   },
-  apis: ['./src/routes/*.ts'], // lire les annotations dans les routes
+    apis: [
+    './src/routes/*.ts', 
+    './dist/routes/*.js', 
+    './src/routes/*.js'
+  ],
 }
 
 const swaggerSpec = swaggerJsdoc(options)
