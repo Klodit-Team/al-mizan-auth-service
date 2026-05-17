@@ -32,6 +32,7 @@ async function main() {
         id: entry.id,
         email: entry.email,
         password: hashedPassword,
+        isActive: true,
       },
     });
   }
