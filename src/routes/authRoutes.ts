@@ -350,8 +350,9 @@ router.post('/api/v1/auth/reset-password', authController.resetPassword)
 const otpController = new OtpController();
 
 // Middleware de validation → Controller
-router.post('/otp/send',   validateSendOtp,   (req, res) => otpController.send(req, res));
-router.post('/otp/verify', validateVerifyOtp, (req, res) => otpController.verify(req, res));
+// Change these two lines:
+router.post('/api/v1/auth/otp/send', validateSendOtp, (req, res) => otpController.send(req, res));
+router.post('/api/v1/auth/otp/verify', validateVerifyOtp, (req, res) => otpController.verify(req, res));
 // src/routes/authRoutes.ts
 
 /**
