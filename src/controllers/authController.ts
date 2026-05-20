@@ -546,7 +546,7 @@ export const login = async (req: Request, res: Response): Promise<void> => {
 
     if (!user || !valid) {
       const result = await recordFailedAttempt(email)
-      if (!user.isActive) {
+      if (user && !user.isActive) {
   res.status(403).json({ message: 'Account not activated. Check your email for the OTP code.' })
   return
 }
