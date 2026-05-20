@@ -21,6 +21,6 @@ jobs:
             echo "🚀 Starting Deployment for auth-service..."
             cd ~/auth-service
             git pull
-            cd ~/al-mizan-deployment
-            sudo docker-compose up -d --build auth-service
+            cd ~/al-mizan-deployments
+            docker compose up -d --build auth-service
             echo "✅ Deployment Successful!"
