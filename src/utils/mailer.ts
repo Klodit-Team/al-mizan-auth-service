@@ -5,11 +5,19 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
-export const resend = new Resend(process.env.RESEND_API_KEY!);
+const apiKey = process.env.RESEND_API_KEY;
+const isMailEnabled = apiKey && apiKey.startsWith('re_') && apiKey.length > 10;
+
+export const resend = isMailEnabled ? new Resend(apiKey) : null;
 
 export async function sendOtpEmail(to: string, code: string): Promise<void> {
+  if (!resend) {
+    console.warn(`[MAILER] Resend not configured. OTP for ${to}: ${code}`);
+    return;
+  }
+
   await resend.emails.send({
-    from: process.env.FROM_EMAIL!,       // noreply@klodit.app
+    from: process.env.FROM_EMAIL || 'noreply@localhost',
     to,
     subject: '🔐 Votre code OTP - Klodit',
     html: `

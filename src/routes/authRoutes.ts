@@ -315,6 +315,8 @@ router.post('/api/v1/auth/verify-token', authController.verifyResetToken)
 
 router.post('/api/v1/auth/reset-password', authController.resetPassword)
 
+router.post('/api/v1/auth/change-password', authenticate, authController.changePassword)
+
 /**
  * @swagger
  * /api/v1/auth/reset-password:

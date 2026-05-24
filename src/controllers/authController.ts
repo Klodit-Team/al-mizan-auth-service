@@ -877,4 +877,56 @@ export class OtpController {
   res.status(result.success ? 200 : 400).json(result);
 }
 }
-export default { register,OtpController, login, refresh, logout, logoutAll, me, sessions, deleteSession, forgotPassword, verifyResetToken, resetPassword }
+// ─── Change Password (authenticated) ───────────────────────────────────────
+
+export const changePassword = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { currentPassword, newPassword, confirmeNewPassword } = req.body
+    const userId = (req as any).user?.userId
+
+    if (!userId) {
+      res.status(401).json({ message: 'Unauthorized' })
+      return
+    }
+
+    if (!currentPassword || !newPassword || !confirmeNewPassword) {
+      res.status(400).json({ message: 'Current password and new password are required' })
+      return
+    }
+
+    if (newPassword.length < 8) {
+      res.status(400).json({ message: 'New password must be at least 8 characters' })
+      return
+    }
+
+    if (newPassword !== confirmeNewPassword) {
+      res.status(400).json({ message: 'New password and confirmation do not match' })
+      return
+    }
+
+    const user = await userService.findById(userId)
+    if (!user) {
+      res.status(404).json({ message: 'User not found' })
+      return
+    }
+
+    const validCurrent = await bcrypt.compare(currentPassword, user.password)
+    if (!validCurrent) {
+      res.status(401).json({ message: 'Current password is incorrect' })
+      return
+    }
+
+    const hashedPassword = await bcrypt.hash(newPassword, 12)
+    await prisma.user.update({
+      where: { id: userId },
+      data: { password: hashedPassword },
+    })
+
+    res.status(200).json({ message: 'Password changed successfully' })
+  } catch (err: any) {
+    console.error("CHANGE_PASSWORD_CRASH:", err)
+    res.status(500).json({ message: 'Server error', error: err.message })
+  }
+}
+
+export default { register,OtpController, login, refresh, logout, logoutAll, me, sessions, deleteSession, forgotPassword, verifyResetToken, resetPassword, changePassword }
