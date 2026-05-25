@@ -172,6 +172,31 @@ router.post('/api/v1/auth/register', authController.register)
  *         description: Erreur serveur
  */
 router.post('/api/v1/auth/login', authController.login)
+
+/**
+ * @swagger
+ * /api/v1/auth/refresh:
+ *   post:
+ *     summary: Refresh access token
+ *     tags: [Auth]
+ *     responses:
+ *       200:
+ *         description: Access token refreshed successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: Token refreshed
+ *       401:
+ *         description: Refresh token missing
+ *       403:
+ *         description: Invalid or expired refresh token
+ *       500:
+ *         description: Server error
+ */
 router.post('/api/v1/auth/refresh', authController.refresh)
 
 /**
@@ -315,6 +340,56 @@ router.post('/api/v1/auth/verify-token', authController.verifyResetToken)
 
 router.post('/api/v1/auth/reset-password', authController.resetPassword)
 
+/**
+ * @swagger
+ * /api/v1/auth/change-password:
+ *   post:
+ *     summary: Change password (authenticated user)
+ *     tags: [Auth]
+ *     security:
+ *       - cookieAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - currentPassword
+ *               - newPassword
+ *               - confirmeNewPassword
+ *             properties:
+ *               currentPassword:
+ *                 type: string
+ *                 example: OldPassword123!
+ *               newPassword:
+ *                 type: string
+ *                 minLength: 8
+ *                 example: NewPassword123!
+ *               confirmeNewPassword:
+ *                 type: string
+ *                 minLength: 8
+ *                 example: NewPassword123!
+ *     responses:
+ *       200:
+ *         description: Password changed successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: Password changed successfully
+ *       400:
+ *         description: Invalid password format or confirmation mismatch
+ *       401:
+ *         description: Unauthorized or current password incorrect
+ *       404:
+ *         description: User not found
+ *       500:
+ *         description: Server error
+ */
 router.post('/api/v1/auth/change-password', authenticate, authController.changePassword)
 
 /**
@@ -366,7 +441,7 @@ router.post('/api/v1/auth/otp/verify', validateVerifyOtp, (req, res) => otpContr
 
 /**
  * @swagger
- * /otp/send:
+ * /api/v1/auth/otp/send:
  *   post:
  *     summary: Envoyer un code OTP par email
  *     tags: [OTP]
@@ -399,35 +474,13 @@ router.post('/api/v1/auth/otp/verify', validateVerifyOtp, (req, res) => otpContr
  *                   example: "Code OTP envoyé à user@example.com"
  *       400:
  *         description: Email invalide ou manquant
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success:
- *                   type: boolean
- *                   example: false
- *                 message:
- *                   type: string
- *                   example: "Email invalide."
  *       500:
  *         description: Erreur serveur lors de l'envoi
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success:
- *                   type: boolean
- *                   example: false
- *                 message:
- *                   type: string
- *                   example: "Échec de l'envoi du code OTP."
  */
 
 /**
  * @swagger
- * /otp/verify:
+ * /api/v1/auth/otp/verify:
  *   post:
  *     summary: Vérifier le code OTP soumis par l'utilisateur
  *     tags: [OTP]
@@ -466,17 +519,6 @@ router.post('/api/v1/auth/otp/verify', validateVerifyOtp, (req, res) => otpContr
  *                   example: "Authentification réussie !"
  *       400:
  *         description: Code incorrect / expiré / déjà utilisé
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success:
- *                   type: boolean
- *                   example: false
- *                 message:
- *                   type: string
- *                   example: "Code incorrect."
  */
 
 export default router
