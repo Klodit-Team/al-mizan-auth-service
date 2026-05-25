@@ -23,6 +23,9 @@ if (process.env.NODE_ENV !== 'test') {
     consumeUserRegisteredResponse,
   } = await import('./rabbitmq.js')
 
+  // Expose the raw JSON
+  app.get('/api-docs-json', (req, res) => res.json(swaggerSpec));
+
   app.use(
     '/api-docs',
     swaggerUi.serve,
