@@ -1,0 +1,1 @@
+{"version":3,"file":"otp.entity.d.ts","sourceRoot":"","sources":["../../src/models/otp.entity.ts"],"names":[],"mappings":"AAGA,MAAM,WAAW,SAAS;IACxB,KAAK,EAAE,MAAM,CAAC;IACd,IAAI,EAAE,MAAM,CAAC;IACb,SAAS,EAAE,IAAI,CAAC;IAChB,QAAQ,EAAE,OAAO,CAAC;CACnB;AAGD,eAAO,MAAM,QAAQ,wBAA+B,CAAC"}

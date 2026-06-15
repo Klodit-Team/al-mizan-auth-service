@@ -1,0 +1,11 @@
+FROM node:20-alpine
+RUN apk add --no-cache openssl
+WORKDIR /app
+COPY package*.json ./
+COPY prisma ./prisma/
+RUN npm install
+RUN npx prisma generate
+# src/ and prisma/ are volume-mounted; generate is re-run via start:dev when schema changes
+EXPOSE 3001
+ENV NODE_ENV=development
+CMD ["sh", "-c", "npx prisma db push --skip-generate 2>/dev/null || true && npm run start:dev"]
